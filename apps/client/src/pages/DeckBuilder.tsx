@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppStore } from "../state/useAppStore.ts";
 import { DataGrid } from "@mui/x-data-grid";
@@ -16,6 +17,7 @@ import Fighting from '../assets/energies/fighting.webp'
 import Darkness from '../assets/energies/darkness.webp'
 import Metal from '../assets/energies/metal.webp'
 import Dragon from '../assets/energies/dragon.webp'
+import type { Deck } from "@pocket/shared";
 
 
 const AUTO_FILTER_ID = "autoSortNotEmpty";
@@ -34,6 +36,7 @@ type PokemonRow = {
   category: "Pokemon" | "Trainer";
   trainerType?: "Item" | "Tool" | "Supporter" | "Stadium";
   description: string;
+  effect: string;
   rarity: string;
   attacks: {name: string, effect: string, cost: string[]}[];
   abilities: {name: string, effect: string, type: string}[];
@@ -55,6 +58,8 @@ const typeImages = {
 export function DeckBuilder() {
     const [rows, setRows] = useState<PokemonRow[]>([]);
     const [selectedCard, setSelectedCard] = useState<PokemonRow | null>(null);
+    const [deck, setDeck] = useState<(PokemonRow | null)[]>(Array(20).fill(null));
+    const navigate = useNavigate();
     useEffect(() => {
         fetch("http://localhost:3001/api/cards")
         .then(res => res.json())
@@ -64,30 +69,116 @@ export function DeckBuilder() {
         });
     }, []);
 
+  const handleAddToDeck = (prev: (PokemonRow | null)[], doubleClickedCard?: PokemonRow) => {
+    if (!selectedCard && !doubleClickedCard) {
+      return prev;
+    }
+    const localSelectedCard = doubleClickedCard ?? selectedCard;
+
+    if (prev.filter(Boolean).length >= 20) {
+      alert("Deck is full");
+      return prev;
+    }
+
+    const firstNullIndex = prev.findIndex(card => card === null);
+    const newDeck = [...prev];
+
+    if (prev.find(card => card?.name === localSelectedCard?.name)) {
+      if (prev.filter(card => card?.name === localSelectedCard?.name).length < 2) {
+        newDeck[firstNullIndex] = localSelectedCard;
+        return newDeck;
+      } else {
+        alert("You can only have 2 cards of the same name in your deck");
+        return newDeck;
+      }
+    }
+    newDeck[firstNullIndex] = localSelectedCard;
+    return newDeck;
+  };
+
+  const handleRemoveFromDeck = (prev: (PokemonRow | null)[]) => {
+    if (!selectedCard) {
+      return prev;
+    }
+    const cardIndex = prev.findIndex(card => card && card.name === selectedCard?.name);
+    if (cardIndex === -1) {
+      return prev;
+    }
+    const newDeck = [...prev];
+    newDeck[cardIndex] = null;
+    return newDeck;
+  };
+
+  const handleSaveDeck = () => {
+    const deckId = uuidv4();
+    const newDeck: Deck = {
+      id: deckId,
+      name: `New Deck ${deckId}`,
+      cards: deck.map(card => card?.id ?? ""),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    useAppStore.getState().addDeck(newDeck);
+    alert("Deck saved");
+    navigate("/lobby");
+  };
+
+  const renderPokemonCardDetails = () => {
+    return (
+      <div className="card-details">
+        <h4>
+          <span style={{ fontWeight: "bold" }}>{selectedCard?.name}</span>
+          <span style={{ fontWeight: "normal", marginLeft: 30 }}>
+            <span style={{ fontSize: "10px", fontWeight: "bold" }}>HP:</span> {selectedCard?.hp}
+            <img style={{ marginLeft: 7 }} height={15} width={15} src={typeImages[selectedCard?.type as keyof typeof typeImages]} alt={selectedCard?.type} />
+          </span>
+        </h4>
+        {(selectedCard?.abilities.length || 0) > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontWeight: "bold" }}>Ability: {selectedCard?.abilities[0].name}</span>
+          <span style={{ fontSize: "14px" }}>{selectedCard?.abilities[0].effect}</span>
+          </div>}
+        <p><span style={{ fontWeight: "bold" }}>Attacks:</span></p>
+        {selectedCard?.attacks.map(attack => <p>{(attack.cost || []).map((energy, i) => <img style={{ marginRight: 2 }} key={energy + i} height={15} width={15} src={typeImages[energy as keyof typeof typeImages]} alt={energy} />)} <span style={{ fontWeight: "bold" }}>{attack.name}</span> {attack.effect ? `- ${attack.effect}` : ""}</p>)}
+        {selectedCard?.weakness && <p><span style={{ fontWeight: "bold" }}>Weakness:</span> <img height={15} width={15} src={typeImages[selectedCard?.weakness?.type as keyof typeof typeImages]} alt={selectedCard?.weakness?.type} /></p>}
+        <p><span style={{ fontWeight: "bold" }}>Retreat:</span> {selectedCard?.retreat}</p>
+      </div>
+    );
+  };
+
+  const renderSupporterCardDetails = () => {
+    return (
+      <div className="card-details">
+        <h4>
+          <span style={{ fontWeight: "bold" }}>{selectedCard?.name}</span>
+          {selectedCard?.hp && <span style={{ fontWeight: "normal", marginLeft: 30 }}>
+            <span style={{ fontSize: "10px", fontWeight: "bold" }}>HP: </span> {selectedCard?.hp}
+            <img style={{ marginLeft: 7 }} height={15} width={15} src={typeImages["Colorless"]} alt="Colorless" />
+          </span>}
+        </h4>
+        <p><span style={{ fontWeight: "bold" }}>Effect:</span></p>
+        <p>{selectedCard?.effect}</p>
+      </div>
+    );
+  };
+
   return (
     <div>
       <h2>Deck Builder</h2>
-      <div style={{ display: "flex", flexDirection: "row", gap: 25 }}>
-        <img height={300} width={200} style={{ backgroundColor: "#808080", borderRadius: 10 }} src={selectedCard?.image ? `${selectedCard.image}/low.webp` : ""} />
-        {selectedCard && <div className="card-details">
-          <h4>
-            <span style={{ fontWeight: "bold" }}>{selectedCard?.name}</span>
-            <span style={{ fontWeight: "normal", marginLeft: 30 }}>
-              <span style={{ fontSize: "10px", fontWeight: "bold" }}>HP:</span> {selectedCard?.hp}
-              <img style={{ marginLeft: 7 }} height={15} width={15} src={typeImages[selectedCard?.type as keyof typeof typeImages]} alt={selectedCard?.type} />
-            </span>
-          </h4>
-          {selectedCard?.abilities.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontWeight: "bold" }}>Ability: {selectedCard?.abilities[0].name}</span>
-            <span style={{ fontSize: "14px" }}>{selectedCard?.abilities[0].effect}</span>
-            </div>}
-          <p><span style={{ fontWeight: "bold" }}>Attacks:</span></p>
-          {selectedCard?.attacks.map(attack => <p>{attack.cost.map((energy, i) => <img style={{ marginRight: 2 }} key={energy + i} height={15} width={15} src={typeImages[energy as keyof typeof typeImages]} alt={energy} />)} <span style={{ fontWeight: "bold" }}>{attack.name}</span> {attack.effect ? `- ${attack.effect}` : ""}</p>)}
-          {selectedCard?.weakness && <p><span style={{ fontWeight: "bold" }}>Weakness:</span> <img height={15} width={15} src={typeImages[selectedCard?.weakness?.type as keyof typeof typeImages]} alt={selectedCard?.weakness?.type} /></p>}
-          <p><span style={{ fontWeight: "bold" }}>Retreat:</span> {selectedCard?.retreat}</p>
-        </div>}
+      <div style={{ display: "flex", flexDirection: "row", gap: 25, marginBottom: 10, justifyContent: "space-between" }}>
+        <div style={{display: "flex", flexDirection: "row", gap: 10}}>
+          <img height={300} width={200} style={{ backgroundColor: "#808080", borderRadius: 10 }} src={selectedCard?.image ? `${selectedCard.image}/low.webp` : undefined} />
+          {selectedCard ? selectedCard.category === "Pokemon" ? renderPokemonCardDetails() : renderSupporterCardDetails() : null}
+        </div>
+        <div style={{ display: "flex", flexDirection: "row", gap: 2, flexWrap: "wrap", width: "100%", maxWidth: "60vw" }}>
+          {deck.map((card, index) => <img key={index} height={140} width={85} style={{ backgroundColor: "#808080", borderRadius: 10, marginRight: 5, flex: "1 0 9%", maxWidth: "80px" }} src={card ? `${card.image}/low.webp` : undefined} onClick={() => setSelectedCard(card ?? null)} />)}
+        </div>
       </div>
-      <PokemonTable rows={rows} setSelectedCard={setSelectedCard} />
+      <div style={{ display: "flex", flexDirection: "row", gap: 1, height: "50px" }}>
+        {selectedCard && <button onClick={() => setDeck((prev) => handleAddToDeck(prev))}>Add to Deck</button>}
+        {selectedCard && <button disabled={deck.filter(Boolean).length !== 20} onClick={handleSaveDeck}>Save Deck</button>}
+        {selectedCard && deck.find(card => card?.name === selectedCard?.name) && <button onClick={() => setDeck((prev) => handleRemoveFromDeck(prev))}>Remove From Deck</button>}
+      </div>
+      <PokemonTable rows={rows} setSelectedCard={setSelectedCard} handleAddToDeck={handleAddToDeck} setDeck={setDeck} />
     </div>
   );
 }
@@ -105,7 +196,7 @@ const rarities = {
     
 };
 
-export function PokemonTable({ rows, setSelectedCard }: { rows: PokemonRow[], setSelectedCard: (card: PokemonRow) => void }) {
+export function PokemonTable({ rows, setSelectedCard, handleAddToDeck, setDeck }: { rows: PokemonRow[], setSelectedCard: (card: PokemonRow) => void, handleAddToDeck: (prev: (PokemonRow | null)[], doubleClickedCard?: PokemonRow) => (PokemonRow | null)[], setDeck: Dispatch<SetStateAction<(PokemonRow | null)[]>> }) {
     const [sortModel, setSortModel] = useState<GridSortModel>([]);
     const [filterModel, setFilterModel] = useState<GridFilterModel>({
         items: [],
@@ -194,6 +285,13 @@ export function PokemonTable({ rows, setSelectedCard }: { rows: PokemonRow[], se
       console.log("row id:", params.id);
       setSelectedCard(params.row);
     };
+
+    const handleRowDoubleClick: GridEventListener<"rowDoubleClick"> = (params) => {
+      console.log("double clicked row:", params.row);
+      console.log("row id:", params.id);
+      setDeck(prev => handleAddToDeck(prev, params.row));
+      setSelectedCard(params.row as PokemonRow);
+    };
   
     return (
       <Box sx={{ height: 700, width: "95vw" }}>
@@ -215,6 +313,7 @@ export function PokemonTable({ rows, setSelectedCard }: { rows: PokemonRow[], se
             onFilterModelChange={handleFilterModelChange}
             disableColumnMenu
             onRowClick={handleRowClick}
+            onRowDoubleClick={handleRowDoubleClick}
             slotProps={{
               toolbar: {
               showQuickFilter: true,
@@ -261,3 +360,8 @@ const getEmptyLastSortComparator =
     ? emptyLastStringComparator
     : (v1: any, v2: any, p1: any, p2: any) =>
         emptyLastStringComparator(v2, v1, p2, p1);
+
+function uuidv4() {
+  return crypto.randomUUID();
+}
+

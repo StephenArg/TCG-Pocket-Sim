@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { devtools, persist, subscribeWithSelector } from "zustand/middleware";
 import type { GameEvent, GameState } from "@pocket/shared";
-import type { User } from "@pocket/shared";
+import type { User, Deck } from "@pocket/shared";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
@@ -9,6 +9,12 @@ type AppState = {
   // identity / lobby
   user: User | null;
   setUser: (user: User | null) => void;
+
+  decks: Deck[];
+  addDeck: (deck: Deck) => void;
+  removeDeck: (deck: Deck) => void;
+  updateDeck: (deck: Deck) => void;
+  clearDecks: () => void;
   /** True after persist has loaded from localStorage (use to avoid flashing "no user" on refresh). */
   _hasHydrated: boolean;
   _setHasHydrated: (value: boolean) => void;
@@ -46,6 +52,13 @@ export const useAppStore = create<AppState>()(
       subscribeWithSelector((set, get) => ({
         user: null,
         setUser: (user) => set({ user }),
+
+        decks: [],
+        addDeck: (deck) => set({ decks: [...get().decks, deck] }),
+        removeDeck: (deck) => set({ decks: get().decks.filter(d => d.id !== deck.id) }),
+        updateDeck: (deck) => set({ decks: get().decks.map(d => d.id === deck.id ? deck : d) }),
+        clearDecks: () => set({ decks: [] }),
+
         _hasHydrated: false,
         _setHasHydrated: (value) => set({ _hasHydrated: value }),
 
@@ -82,11 +95,11 @@ export const useAppStore = create<AppState>()(
       {
         name: "tcgp-app", // localStorage key
         // Persist only user/lobby stuff; do NOT persist game snapshots.
-        partialize: (s) => (s.user ? { user: s.user } : null),
+        partialize: (s) => ({ user: s.user ? s.user : null, decks: s.decks ? s.decks : [] }),
         onRehydrateStorage: () => (state) => {
           state?._setHasHydrated(true);
         },
-      }
+      },
     ),
     { name: "AppStore" }
   )
