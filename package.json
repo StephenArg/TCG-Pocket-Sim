@@ -1,0 +1,23 @@
+{
+  "name": "tcgp-simulator",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev:client": "cd apps/client && bun run dev",
+    "dev:server": "cd apps/server && bun run dev",
+    "types": "bun run --cwd packages/shared build"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/cors": "^2.8.19",
+    "tsup": "^8.5.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "cors": "^2.8.6"
+  }
+}
